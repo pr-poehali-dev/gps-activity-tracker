@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 import Icon from '@/components/ui/icon';
 
 interface Goal {
@@ -24,23 +29,167 @@ interface Achievement {
   icon: string;
 }
 
+const defaultGoals: Goal[] = [
+  { id: '1', title: 'Шаги', target: 10000, current: 0, unit: 'шагов', icon: 'Footprints', color: 'text-purple-600' },
+  { id: '2', title: 'Бег', target: 5, current: 0, unit: 'км', icon: 'Zap', color: 'text-pink-600' },
+  { id: '3', title: 'Активность', target: 180, current: 0, unit: 'мин', icon: 'Activity', color: 'text-orange-600' },
+  { id: '4', title: 'Калории', target: 500, current: 0, unit: 'ккал', icon: 'Flame', color: 'text-red-600' }
+];
+
+const iconOptions = [
+  { value: 'Footprints', label: 'Шаги' },
+  { value: 'Zap', label: 'Энергия' },
+  { value: 'Activity', label: 'Активность' },
+  { value: 'Flame', label: 'Огонь' },
+  { value: 'Heart', label: 'Сердце' },
+  { value: 'Dumbbell', label: 'Гантеля' },
+  { value: 'Bike', label: 'Велосипед' },
+  { value: 'Trophy', label: 'Трофей' },
+  { value: 'Target', label: 'Мишень' },
+  { value: 'Timer', label: 'Таймер' }
+];
+
+const colorOptions = [
+  { value: 'text-purple-600', label: 'Фиолетовый' },
+  { value: 'text-pink-600', label: 'Розовый' },
+  { value: 'text-orange-600', label: 'Оранжевый' },
+  { value: 'text-red-600', label: 'Красный' },
+  { value: 'text-blue-600', label: 'Синий' },
+  { value: 'text-green-600', label: 'Зелёный' },
+  { value: 'text-yellow-600', label: 'Жёлтый' },
+  { value: 'text-indigo-600', label: 'Индиго' }
+];
+
 const Index = () => {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('dashboard');
-  
-  const todayStats = {
-    steps: 8547,
-    distance: 6.2,
-    activeTime: 127,
-    calories: 432,
-    sitting: 245
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [newGoal, setNewGoal] = useState({
+    title: '',
+    target: '',
+    current: '',
+    unit: '',
+    icon: 'Target',
+    color: 'text-purple-600'
+  });
+
+  useEffect(() => {
+    const savedGoals = localStorage.getItem('activityGoals');
+    if (savedGoals) {
+      setGoals(JSON.parse(savedGoals));
+    } else {
+      setGoals(defaultGoals);
+      localStorage.setItem('activityGoals', JSON.stringify(defaultGoals));
+    }
+  }, []);
+
+  const saveGoals = (updatedGoals: Goal[]) => {
+    setGoals(updatedGoals);
+    localStorage.setItem('activityGoals', JSON.stringify(updatedGoals));
   };
 
-  const goals: Goal[] = [
-    { id: '1', title: 'Шаги', target: 10000, current: 8547, unit: 'шагов', icon: 'Footprints', color: 'text-purple-600' },
-    { id: '2', title: 'Бег', target: 5, current: 3.2, unit: 'км', icon: 'Zap', color: 'text-pink-600' },
-    { id: '3', title: 'Активность', target: 180, current: 127, unit: 'мин', icon: 'Activity', color: 'text-orange-600' },
-    { id: '4', title: 'Калории', target: 500, current: 432, unit: 'ккал', icon: 'Flame', color: 'text-red-600' }
-  ];
+  const handleCreateGoal = () => {
+    if (!newGoal.title || !newGoal.target || !newGoal.unit) {
+      toast({
+        title: 'Ошибка',
+        description: 'Заполните все обязательные поля',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const goal: Goal = {
+      id: Date.now().toString(),
+      title: newGoal.title,
+      target: parseFloat(newGoal.target),
+      current: parseFloat(newGoal.current) || 0,
+      unit: newGoal.unit,
+      icon: newGoal.icon,
+      color: newGoal.color
+    };
+
+    const updatedGoals = [...goals, goal];
+    saveGoals(updatedGoals);
+    setIsDialogOpen(false);
+    setNewGoal({ title: '', target: '', current: '', unit: '', icon: 'Target', color: 'text-purple-600' });
+    toast({
+      title: 'Цель создана!',
+      description: `Новая цель "${goal.title}" добавлена`
+    });
+  };
+
+  const handleUpdateGoal = () => {
+    if (!editingGoal || !newGoal.title || !newGoal.target || !newGoal.unit) {
+      toast({
+        title: 'Ошибка',
+        description: 'Заполните все обязательные поля',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const updatedGoals = goals.map(g => 
+      g.id === editingGoal.id 
+        ? {
+            ...g,
+            title: newGoal.title,
+            target: parseFloat(newGoal.target),
+            current: parseFloat(newGoal.current) || 0,
+            unit: newGoal.unit,
+            icon: newGoal.icon,
+            color: newGoal.color
+          }
+        : g
+    );
+
+    saveGoals(updatedGoals);
+    setIsDialogOpen(false);
+    setEditingGoal(null);
+    setNewGoal({ title: '', target: '', current: '', unit: '', icon: 'Target', color: 'text-purple-600' });
+    toast({
+      title: 'Цель обновлена!',
+      description: `Цель "${newGoal.title}" успешно изменена`
+    });
+  };
+
+  const handleDeleteGoal = (goalId: string) => {
+    const updatedGoals = goals.filter(g => g.id !== goalId);
+    saveGoals(updatedGoals);
+    toast({
+      title: 'Цель удалена',
+      description: 'Цель успешно удалена из списка'
+    });
+  };
+
+  const handleEditGoal = (goal: Goal) => {
+    setEditingGoal(goal);
+    setNewGoal({
+      title: goal.title,
+      target: goal.target.toString(),
+      current: goal.current.toString(),
+      unit: goal.unit,
+      icon: goal.icon,
+      color: goal.color
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleUpdateProgress = (goalId: string, newCurrent: number) => {
+    const updatedGoals = goals.map(g => 
+      g.id === goalId ? { ...g, current: Math.max(0, newCurrent) } : g
+    );
+    saveGoals(updatedGoals);
+  };
+  
+  const todayStats = {
+    steps: goals.find(g => g.icon === 'Footprints')?.current || 0,
+    distance: goals.find(g => g.icon === 'MapPin')?.current || 0,
+    activeTime: goals.find(g => g.icon === 'Activity')?.current || 0,
+    calories: goals.find(g => g.icon === 'Flame')?.current || 0,
+    sitting: 245
+  };
 
   const achievements: Achievement[] = [
     { id: '1', title: '10 000 шагов!', description: 'Достигнута цель по ходьбе', date: '23 ноября', icon: 'Award' },
@@ -215,6 +364,120 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="goals" className="space-y-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Мои цели</h2>
+              <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (!open) {
+                  setEditingGoal(null);
+                  setNewGoal({ title: '', target: '', current: '', unit: '', icon: 'Target', color: 'text-purple-600' });
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Icon name="Plus" size={18} />
+                    Создать цель
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>{editingGoal ? 'Редактировать цель' : 'Создать новую цель'}</DialogTitle>
+                    <DialogDescription>
+                      {editingGoal ? 'Измените параметры существующей цели' : 'Добавьте новую цель для отслеживания'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="title">Название цели *</Label>
+                      <Input
+                        id="title"
+                        placeholder="Например: Ежедневная пробежка"
+                        value={newGoal.title}
+                        onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="target">Цель *</Label>
+                        <Input
+                          id="target"
+                          type="number"
+                          placeholder="10000"
+                          value={newGoal.target}
+                          onChange={(e) => setNewGoal({ ...newGoal, target: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="current">Текущее значение</Label>
+                        <Input
+                          id="current"
+                          type="number"
+                          placeholder="0"
+                          value={newGoal.current}
+                          onChange={(e) => setNewGoal({ ...newGoal, current: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="unit">Единица измерения *</Label>
+                      <Input
+                        id="unit"
+                        placeholder="шагов, км, мин, ккал"
+                        value={newGoal.unit}
+                        onChange={(e) => setNewGoal({ ...newGoal, unit: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="icon">Иконка</Label>
+                        <Select value={newGoal.icon} onValueChange={(value) => setNewGoal({ ...newGoal, icon: value })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {iconOptions.map(opt => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                <div className="flex items-center gap-2">
+                                  <Icon name={opt.value as any} size={16} />
+                                  {opt.label}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="color">Цвет</Label>
+                        <Select value={newGoal.color} onValueChange={(value) => setNewGoal({ ...newGoal, color: value })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {colorOptions.map(opt => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded-full bg-current ${opt.value}`} />
+                                  {opt.label}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      Отмена
+                    </Button>
+                    <Button onClick={editingGoal ? handleUpdateGoal : handleCreateGoal}>
+                      {editingGoal ? 'Сохранить' : 'Создать'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               {goals.map((goal, index) => {
                 const progress = Math.round((goal.current / goal.target) * 100);
@@ -237,12 +500,14 @@ const Index = () => {
                             <CardDescription>Цель: {goal.target} {goal.unit}</CardDescription>
                           </div>
                         </div>
-                        {isCompleted && (
-                          <Badge className="bg-green-500">
-                            <Icon name="Check" size={14} className="mr-1" />
-                            Выполнено
-                          </Badge>
-                        )}
+                        <div className="flex gap-1">
+                          {isCompleted && (
+                            <Badge className="bg-green-500">
+                              <Icon name="Check" size={14} className="mr-1" />
+                              Выполнено
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -264,6 +529,38 @@ const Index = () => {
                           Осталось: {(goal.target - goal.current).toFixed(1)} {goal.unit}
                         </p>
                       )}
+                      <div className="flex gap-2 pt-2 border-t">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1 gap-1"
+                          onClick={() => handleUpdateProgress(goal.id, goal.current - 1)}
+                        >
+                          <Icon name="Minus" size={14} />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          className="flex-1 gap-1"
+                          onClick={() => handleUpdateProgress(goal.id, goal.current + 1)}
+                        >
+                          <Icon name="Plus" size={14} />
+                          Добавить
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleEditGoal(goal)}
+                        >
+                          <Icon name="Edit" size={14} />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive" 
+                          onClick={() => handleDeleteGoal(goal.id)}
+                        >
+                          <Icon name="Trash2" size={14} />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 );
